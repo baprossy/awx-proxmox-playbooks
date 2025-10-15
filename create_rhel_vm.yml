@@ -1,53 +1,54 @@
 ---
-- name: Création automatique d'une VM RHEL sur Proxmox
+- name: Création automatique d’une VM RHEL sur Proxmox
   hosts: localhost
   gather_facts: no
-  collections:
-    - community.general
-
   vars:
-    proxmox_api_host: "192.168.1.56"
-    proxmox_api_user: "awx@pve"
-    proxmox_api_password: "baraka2025"
-    proxmox_node: "pve"
-    iso_image: "local:iso/rhel-9.6-x86_64-dvd.iso"
-    storage_pool: "local-lvm"
-    bridge_name: "vmbr0"
-    vm_name: "rhel-auto-{{ 9999 | random }}"
+    proxmox_host: "192.168.1.56"
+    proxmox_user: "root@pam"
+    proxmox_password: "baraka"
+    node_name: "pve"
+    vm_id: 200
+    vm_name: "rhel-auto"
+    iso_name: "rhel-9.iso"        # vérifie le nom exact de ton ISO
+    storage_name: "local-lvm"
+    disk_size: "80G"
+    memory: 4096
+    cores: 2
+    net_bridge: "vmbr0"
 
   tasks:
-    - name: Vérification de la connexion à l’API Proxmox
-      uri:
-        url: "https://{{ proxmox_api_host }}:8006/api2/json/version"
-        method: GET
-        validate_certs: no
-      register: api_check
-
-    - name: Afficher la version de Proxmox
-      debug:
-        msg: "Connexion réussie - Version Proxmox : {{ api_check.json.data.version }}"
-
     - name: Création de la VM RHEL
       community.general.proxmox_kvm:
-        api_host: "{{ proxmox_api_host }}"
-        api_user: "{{ proxmox_api_user }}"
-        api_password: "{{ proxmox_api_password }}"
-        validate_certs: no
-        node: "{{ proxmox_node }}"
+        api_user: "{{ proxmox_user }}"
+        api_password: "{{ proxmox_password }}"
+        api_host: "{{ proxmox_host }}"
+        node: "{{ node_name }}"
+        vmid: "{{ vm_id }}"
         name: "{{ vm_name }}"
-        cores: 2
-        sockets: 1
-        memory: 4096
-        scsihw: virtio-scsi-pci
-        sata0: "{{ storage_pool }}:80"
-        ide2: "{{ iso_image }},media=cdrom"
-        net0: "virtio,bridge={{ bridge_name }}"
+        iso: "{{ iso_name }}"
+        storage: "{{ storage_name }}"
+        disk: "{{ disk_size }}"
+        memory: "{{ memory }}"
+        cores: "{{ cores }}"
+        net:
+          - model: virtio
+            bridge: "{{ net_bridge }}"
         ostype: l26
-        pool: "default"
         state: present
-      register: creation_vm
+        scsihw: virtio-scsi-pci
+        boot: cdn
+        bootdisk: scsi0
+        onboot: yes
+        agent: 1
+      delegate_to: localhost
 
-    - name: Afficher le résultat
-      debug:
-        var: creation_vm
+    - name: Démarrage de la VM
+      community.general.proxmox_kvm:
+        api_user: "{{ proxmox_user }}"
+        api_password: "{{ proxmox_password }}"
+        api_host: "{{ proxmox_host }}"
+        node: "{{ node_name }}"
+        vmid: "{{ vm_id }}"
+        state: started
+      delegate_to: localhost
 
