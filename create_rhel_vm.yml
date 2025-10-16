@@ -1,54 +1,51 @@
 ---
-- name: Création automatique d’une VM RHEL sur Proxmox
+- name: Création de 6 VMs RHEL (3 en 9.6 et 3 en 10)
   hosts: localhost
-  gather_facts: no
+  gather_facts: false
+  collections:
+    - community.general
+
   vars:
-    proxmox_host: "192.168.1.56"
-    proxmox_user: "root@pam"
-    proxmox_password: "baraka"
-    node_name: "pve"
-    vm_id: 200
-    vm_name: "rhel-auto"
-    iso_name: "rhel-9.iso"        # vérifie le nom exact de ton ISO
-    storage_name: "local-lvm"
-    disk_size: "80G"
-    memory: 4096
-    cores: 2
-    net_bridge: "vmbr0"
+    api_user: "root@pam"
+    api_password: "baraka"
+    api_host: "192.168.1.56"
+    vm_storage: "local-lvm"
+    vm_bridge: "vmbr0"
+    vm_memory: 4096
+    vm_disk_size: 80
+    rhel96_iso: "local:iso/rhel-9.6-x86_64-dvd.iso"
+    rhel10_iso: "local:iso/rhel-10.0-x86_64-dvd.iso"
+
+    vm_list:
+      # --- RHEL 9.6 ---
+      - { name: "rhel96-vm1", iso: "{{ rhel96_iso }}", id: 301 }
+      - { name: "rhel96-vm2", iso: "{{ rhel96_iso }}", id: 302 }
+      - { name: "rhel96-vm3", iso: "{{ rhel96_iso }}", id: 303 }
+
+      # --- RHEL 10 ---
+      - { name: "rhel10-vm1", iso: "{{ rhel10_iso }}", id: 311 }
+      - { name: "rhel10-vm2", iso: "{{ rhel10_iso }}", id: 312 }
+      - { name: "rhel10-vm3", iso: "{{ rhel10_iso }}", id: 313 }
 
   tasks:
-    - name: Création de la VM RHEL
+    - name: Création des VMs RHEL
       community.general.proxmox_kvm:
-        api_user: "{{ proxmox_user }}"
-        api_password: "{{ proxmox_password }}"
-        api_host: "{{ proxmox_host }}"
-        node: "{{ node_name }}"
-        vmid: "{{ vm_id }}"
-        name: "{{ vm_name }}"
-        iso: "{{ iso_name }}"
-        storage: "{{ storage_name }}"
-        disk: "{{ disk_size }}"
-        memory: "{{ memory }}"
-        cores: "{{ cores }}"
-        net:
-          - model: virtio
-            bridge: "{{ net_bridge }}"
-        ostype: l26
-        state: present
+        api_user: "{{ api_user }}"
+        api_password: "{{ api_password }}"
+        api_host: "{{ api_host }}"
+        vmid: "{{ item.id }}"
+        name: "{{ item.name }}"
+        node: "pve"
+        cores: 2
+        memory: "{{ vm_memory }}"
         scsihw: virtio-scsi-pci
-        boot: cdn
-        bootdisk: scsi0
-        onboot: yes
-        agent: 1
-      delegate_to: localhost
-
-    - name: Démarrage de la VM
-      community.general.proxmox_kvm:
-        api_user: "{{ proxmox_user }}"
-        api_password: "{{ proxmox_password }}"
-        api_host: "{{ proxmox_host }}"
-        node: "{{ node_name }}"
-        vmid: "{{ vm_id }}"
-        state: started
-      delegate_to: localhost
+        ide2: "{{ item.iso }},media=cdrom"
+        sata0: "{{ vm_storage }}:{{ vm_disk_size }}"
+        net0: "virtio,bridge={{ vm_bridge }}"
+        ostype: l26
+        bootdisk: sata0
+        boot: "cdn"
+        state: present
+        force: true
+      loop: "{{ vm_list }}"
 
