@@ -1,5 +1,5 @@
 ---
-- name: Création de 6 VMs RHEL (3 en 9.6 et 3 en 10)
+- name: Création de 6 VMs RHEL (3 en 9.6 et 3 en 10) avec vérification
   hosts: localhost
   gather_facts: false
   collections:
@@ -28,6 +28,7 @@
       - { name: "rhel10-vm3", iso: "{{ rhel10_iso }}", id: 313 }
 
   tasks:
+
     - name: Création des VMs RHEL
       community.general.proxmox_kvm:
         api_user: "{{ api_user }}"
@@ -47,5 +48,34 @@
         boot: "cdn"
         state: present
         force: true
+      loop: "{{ vm_list }}"
+      register: creation_result
+
+    - name: Afficher le résultat brut de la création
+      debug:
+        var: creation_result
+
+    - name: Pause de 10 secondes pour laisser Proxmox enregistrer les VMs
+      pause:
+        seconds: 10
+
+    - name: Vérifier les VMs créées sur Proxmox
+      community.general.proxmox_vm_info:
+        api_user: "{{ api_user }}"
+        api_password: "{{ api_password }}"
+        api_host: "{{ api_host }}"
+      register: vm_info
+
+    - name: Afficher les VMs détectées
+      debug:
+        msg: "{{ item.name }}"
+      loop: "{{ vm_info.proxmox_vms }}"
+
+    - name: Vérifier que toutes les VMs prévues existent bien
+      assert:
+        that:
+          - item.name in (vm_info.proxmox_vms | map(attribute='name') | list)
+        fail_msg: "❌ La VM {{ item.name }} n’a pas été trouvée sur Proxmox !"
+        success_msg: "✅ La VM {{ item.name }} est bien présente."
       loop: "{{ vm_list }}"
 
