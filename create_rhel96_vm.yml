@@ -1,0 +1,58 @@
+---
+- name: "Création VM RHEL 9.6 sur Proxmox"
+  hosts: all
+  gather_facts: no
+  become: yes
+
+  vars:
+    proxmox_node: "pve"
+    storage: "local-lvm"
+    iso_storage: "local"
+    rhel_iso: "rhel-9.6-x86_64-dvd.iso"
+    network_bridge: "vmbr0"
+
+    vmid: 303
+    vm_name: "rhel96-vm3"
+    vm_memory: 4096
+    vm_cores: 2
+    vm_disk: 80
+
+  tasks:
+
+    - name: "Arrêter VM {{ vmid }} si elle existe"
+      shell: "qm stop {{ vmid }}"
+      ignore_errors: yes
+
+    - name: "Supprimer VM {{ vmid }} si existante"
+      shell: "qm destroy {{ vmid }} --purge"
+      ignore_errors: yes
+
+    - name: "Créer VM RHEL 9.6"
+      shell: |
+        qm create {{ vmid }} \
+          --name {{ vm_name }} \
+          --memory {{ vm_memory }} \
+          --cores {{ vm_cores }} \
+          --cpu host \
+          --sockets 1 \
+          --ostype l26 \
+          --machine q35 \
+          --bios ovmf \
+          --scsihw virtio-scsi-pci \
+          --scsi0 {{ storage }}:{{ vm_disk }},format=qcow2 \
+          --efidisk0 {{ storage }}:1,format=raw \
+          --ide2 {{ iso_storage }}:iso/{{ rhel_iso }},media=cdrom \
+          --net0 virtio,bridge={{ network_bridge }} \
+          --boot order=ide2;scsi0 \
+          --bootdisk scsi0 \
+          --vga std \
+          --serial0 socket \
+          --agent enabled=1
+
+    - name: "Démarrer VM RHEL 9.6"
+      shell: "qm start {{ vmid }}"
+
+    - name: "✅ VM prête"
+      debug:
+        msg: "VM {{ vmid }} ({{ vm_name }}) créée et démarrée avec succès"
+
